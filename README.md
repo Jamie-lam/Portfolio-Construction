@@ -25,13 +25,13 @@ The file below implements five weighting schemes (**EW, RP, DR, GMV, MSR**) usin
 ## 📊 Weighting Schemes & Objectives
 | Scheme | Objective (minimise unless noted) |
 |--------|------------------------------------|
-| **EW** | \( w_i = 1/N \) |
-| **RP** | Var of risk contributions \( RC_i \) |
-| **DR** | \( -\, \text{DR} = -\frac{\sum w_i\sigma_i}{\sqrt{w^T\Sigma w}} \) |
-| **GMV**| Portfolio variance \( w^T\Sigma w \) |
-| **MSR**| \( -\text{Sharpe} = -\frac{w^T\mu-r_f}{\sqrt{w^T\Sigma w}} \) |
+| **EW** | $ w_i = 1/N $ |
+| **RP** | Var of risk contributions $ RC_i $ |
+| **DR** | $ -\, \text{DR} = -\frac{\sum w_i\sigma_i}{\sqrt{w^T\Sigma w}} $ |
+| **GMV**| Portfolio variance $ w^T\Sigma w $ |
+| **MSR**| $ -\text{Sharpe} = -\frac{w^T\mu-r_f}{\sqrt{w^T\Sigma w}} $ |
 
-Ledoit‑Wolf shrinkage is applied to \(\Sigma\) for robustness.
+Ledoit‑Wolf shrinkage is applied to $\Sigma\$ for robustness.
 
 ---
 
