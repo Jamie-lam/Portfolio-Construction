@@ -26,8 +26,8 @@ The file below implements five weighting schemes (**EW, RP, DR, GMV, MSR**) usin
 | Scheme | Objective Functions                |
 |--------|------------------------------------|
 | **EW** | $w_i = 1/N$                        |
-| **RP** | $\text{Var of risk contributions} = $RC_i$ |
-| **DR** | $ \text{DR} = \frac{\sum w_i\sigma_i}{\sqrt{w^T\Sigma w}}$ |
+| **RP** | $\text{Var of risk contributions} = RC_i$ |
+| **DR** | $\text{DR} = \frac{\sum w_i\sigma_i}{\sqrt{w^T\Sigma w}}$ |
 | **GMV**| $\text{Portfolio variance} = w^T\Sigma w$ |
 | **MSR**| $\text{Sharpe} = \frac{w^T\mu-r_f}{\sqrt{w^T\Sigma w}}$ |
 
