@@ -7,6 +7,13 @@ This repository demonstrates how to combine **Smart‑Beta portfolio optimisatio
 ## 📦 Library — `smartbeta.py`
 The file below implements five weighting schemes (**EW, RP, DR, GMV, MSR**) using the covariance matrix and exposes helper methods to obtain weights and portfolio return series.
 
+## 📊 Dataset Overview
+
+This project uses monthly data from **2006 to 2016**, including:
+
+- **25+ global equity indices** (e.g., NKY, HSI, SPX, DAX, IBEX, SHSZ300) from Asia, Europe, and the US.
+- **Macro factors** such as FX rates (EUR, JPY, CNY, GBP), commodities (gold, oil, copper, wheat), and the US Dollar Index (DXY).
+  
 ---
 
 ## 🔧 Workflow Overview
