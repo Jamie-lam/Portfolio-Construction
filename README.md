@@ -1,121 +1,167 @@
-# Portfolio-Construction
+# 📘 Smart Beta Portfolio Construction with PCA Mimicking Portfolios
 
-Smart Beta Portfolio Construction with PCA Mimicking Portfolios
+This repository demonstrates how to combine **Smart‑Beta portfolio optimisation** with **Principal Component Analysis (PCA)** to analyse factor‑mimicking portfolios built from a universe of equities. All optimisation logic is packaged in the companion library **`smartbeta_refined.py`** (included in the repo).
 
-This project explores Smart Beta weighting schemes combined with Principal Component Analysis (PCA) to understand factor exposures of equity portfolios. It includes portfolio optimization, PCA-based factor construction, and performance analysis.
+---
 
-📁 Files
+## 📦 Library — `smartbeta_refined.py`
+The file below implements five weighting schemes (**EW, RP, DR, GMV, MSR**) using Ledoit‑Wolf shrinkage for the covariance matrix and exposes helper methods to obtain weights and portfolio return series.
 
-factors.ipynb: Full notebook including PCA projection, regression analysis, portfolio optimization, and return decomposition.
+```python
+import pandas as pd
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.covariance import LedoitWolf
+import statsmodels.api as sm
+from scipy.optimize import minimize
+from pathlib import Path
 
-HW2.xlsx: Contains raw equity and factor data.
+class SmartBeta:
+    """Smart‑beta optimiser supporting EW, RP, DR, GMV, MSR."""
 
-scheme_returns.csv: Output of optimized portfolio returns under various weighting schemes.
+    def __init__(self, prices: pd.DataFrame, scheme: str,
+                 rf: float = 0.0, lb: float = 0.01, ub: float = 0.10,
+                 tol: float = 1e-10):
+        self.prices = prices.dropna(how="any")
+        self.scheme = scheme.upper()
+        self.rf, self.lb, self.ub, self.tol = rf, lb, ub, tol
+        self.returns = self.prices.pct_change().dropna()
+        self.cov = LedoitWolf().fit(self.returns).covariance_
+        self.mu = self.returns.mean().values
+        self.n_assets = self.returns.shape[1]
 
-hw2b_beta.csv, hw2b_beta2.csv: PCA factor loadings from regressions.
+    # --- objective functions --------------------------------------------
+    def _risk_parity(self, w):
+        vol = np.sqrt(w @ self.cov @ w)
+        mrc = (self.cov @ w) / vol
+        rc = w * mrc
+        return np.var(rc)
 
-⚙️ Project Structure
+    def _div_ratio(self, w):
+        asset_vol = np.sqrt(np.diag(self.cov))
+        dr = (w @ asset_vol) / np.sqrt(w @ self.cov @ w)
+        return -dr
 
-Part A: PCA Factor Extraction
+    def _min_var(self, w):
+        return w @ self.cov @ w
 
-Perform PCA on standardized factor return data to construct five principal components (PCs).
+    def _neg_sharpe(self, w):
+        ret = self.mu @ w
+        vol = np.sqrt(w @ self.cov @ w)
+        return -(ret - self.rf) / vol
 
+    # --- optimisation ----------------------------------------------------
+    def optimise(self):
+        if self.scheme == "EW":
+            return np.repeat(1 / self.n_assets, self.n_assets)
+        obj = {"RP": self._risk_parity, "DR": self._div_ratio,
+               "GMV": self._min_var, "MSR": self._neg_sharpe}[self.scheme]
+        x0 = np.repeat(1 / self.n_assets, self.n_assets)
+        bounds = [(self.lb, self.ub)] * self.n_assets
+        cons = ({'type': 'eq', 'fun': lambda w: np.sum(w) - 1},)
+        res = minimize(obj, x0, method="SLSQP", bounds=bounds,
+                       constraints=cons, tol=self.tol)
+        if not res.success:
+            raise RuntimeError(res.message)
+        return res.x
+
+    # --- public helpers --------------------------------------------------
+    def weights(self):
+        return pd.Series(self.optimise(), index=self.returns.columns, name=self.scheme)
+
+    def portfolio_returns(self):
+        w = self.optimise()
+        return (self.returns @ w).rename(self.scheme)
+
+# --- convenience ---------------------------------------------------------
+
+def compute_scheme_returns(prices, schemes=("EW", "RP", "DR", "GMV", "MSR"), rf=0):
+    return pd.concat([SmartBeta(prices, s, rf).portfolio_returns() for s in schemes], axis=1)
+
+if __name__ == "__main__":
+    fp = Path("./HW2.xlsx")
+    equity_df = pd.read_excel(fp, sheet_name="equity", index_col=0, parse_dates=[0])
+    factor_df = pd.read_excel(fp, sheet_name="factor", index_col=0, parse_dates=[0])
+
+    # PCA factors (Part A)
+    returns_f = factor_df.pct_change().dropna()
+    pcs = PCA(n_components=5).fit_transform(StandardScaler().fit_transform(returns_f))
+    pcs_df = pd.DataFrame(pcs, index=returns_f.index, columns=[f"PC{i+1}" for i in range(5)])
+
+    # Betas (Part B)
+    excess = equity_df.pct_change().dropna()
+    model = sm.OLS(pcs_df, excess).fit()
+    model.params.to_csv("hw2b_beta.csv")
+
+    # Scheme returns (Part Q3)
+    compute_scheme_returns(equity_df, rf=0).to_csv("scheme_returns.csv")
+```
+
+---
+
+## 🔧 Workflow Overview
+
+### 1️⃣ PCA Factor Extraction
+```python
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 standardized_data = StandardScaler().fit_transform(factor_returns)
 pca = PCA(n_components=5)
-principal_components = pca.fit_transform(standardized_data)
+pcs = pca.fit_transform(standardized_data)
+```
 
-Part B: PCA Regression
-
-Regress standardized excess equity returns onto PCA scores to estimate factor betas.
-
+### 2️⃣ PCA Regression
+```python
 import statsmodels.api as sm
 model = sm.OLS(pcs_df, excess_returns).fit()
-beta_values = model.params
+betas = model.params
+```
 
-Part C: Mimicking Portfolio Construction
+### 3️⃣ Mimicking Portfolio Projection
+```python
+X = excess_returns @ betas
+model_mimic = sm.OLS(pcs_df, X).fit()
+```
 
-Use the betas to project back onto equity space and estimate mimicking portfolio returns.
+### 4️⃣ Smart‑Beta Weight Optimisation
+See **`smartbeta_refined.py`** above for objective functions and SLSQP optimisation.
 
-X = np.dot(excess_returns, beta_values)
-model_m = sm.OLS(pcs_df, X).fit()
+---
 
-📊 Weighting Schemes (Smart Beta Models)
+## 📊 Weighting Schemes & Objectives
+| Scheme | Objective (minimise unless noted) |
+|--------|------------------------------------|
+| **EW** | \( w_i = 1/N \) |
+| **RP** | Var of risk contributions \( RC_i \) |
+| **DR** | \( -\, \text{DR} = -\frac{\sum w_i\sigma_i}{\sqrt{w^T\Sigma w}} \) |
+| **GMV**| Portfolio variance \( w^T\Sigma w \) |
+| **MSR**| \( -\text{Sharpe} = -\frac{w^T\mu-r_f}{\sqrt{w^T\Sigma w}} \) |
 
-Scheme
+Ledoit‑Wolf shrinkage is applied to \(\Sigma\) for robustness.
 
-Description
+---
 
-Objective Function
+## 📈 Risk Metrics
+- **CAGR**, **Annualised Return & Volatility**, **Sharpe Ratio** (\( r_f=0 \)) computed from `scheme_returns.csv`.
 
-EW
+---
 
-Equal Weight
+## 🚀 Quick Start
+```bash
+pip install -r requirements.txt      # includes jupyter, pandas, numpy, scikit-learn, statsmodels, openpyxl
+python smartbeta_refined.py          # generates CSV outputs
+jupyter notebook factors.ipynb       # optional interactive exploration
+```
 
+---
 
+## 👤 Author
+**Jamie Lam** – MSc Financial Engineering, EDHEC
 
-RP
+---
 
-Risk Parity
+## 📄 License
+Academic & interview demonstration only.
 
-Minimize variance of risk contributions: 
-
-DR
-
-Diversification Ratio
-
-
-
-GMV
-
-Global Minimum Variance
-
-
-
-MSR
-
-Maximum Sharpe Ratio
-
-
-
-Covariance matrix  is estimated using Ledoit-Wolf shrinkage for numerical stability.
-
-📊 Risk Metrics Reported
-
-CAGR: Compound Annual Growth Rate
-
-Annualized Return & Volatility
-
-Sharpe Ratio: Assuming risk-free rate 
-
-All metrics are computed from the scheme-level return series.
-
-📌 Usage
-
-Install dependencies:
-
-pip install pandas numpy matplotlib scikit-learn statsmodels openpyxl jupyter
-
-Open factors.ipynb in Jupyter or VSCode.
-
-Run the notebook to generate return tables and plots.
-
-📈 Sample Output
-
-PCA component loadings
-
-Scheme vs. PCA exposure matrix
-
-Cumulative return plots
-
-Smart beta risk metrics
-
-👤 Author
-
-Jamie LamMSc Financial Engineering Candidate @ EDHEC
-
-📄 License
-
-This project is for academic use and interview demonstration purposes.
